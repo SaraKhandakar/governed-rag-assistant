@@ -1,0 +1,11 @@
+streamlit
+pandas
+openpyxl
+xlrd
+chromadb
+langchain
+langchain-community
+langchain-chroma
+sentence-transformers
+unstructured
+pypdf
