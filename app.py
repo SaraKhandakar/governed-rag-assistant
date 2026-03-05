@@ -110,11 +110,11 @@ End with citations like [1], [2] referencing the sources.
 ANSWER:
 """
 
-try:
-    resp = llm.invoke([HumanMessage(content=prompt)])
-    return resp.content, sources
-except Exception as e:
-    return f"❌ Cloud LLM error: {e}", sources
+    try:
+        resp = llm.invoke([HumanMessage(content=prompt)])
+        return resp.content, sources
+    except Exception as e:
+        return f"❌ Cloud LLM error: {e}", sources
 
 # ---------- Chat UI ----------
 if "history" not in st.session_state:
