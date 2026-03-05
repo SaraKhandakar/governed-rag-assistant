@@ -1,5 +1,4 @@
 import os
-import json
 import streamlit as st
 
 from langchain_chroma import Chroma
@@ -13,7 +12,7 @@ DB_DIR = "chroma_db"
 st.set_page_config(page_title="Governed RAG Assistant", layout="wide")
 st.title("📚 Governed RAG Assistant (Local + Cloud modes)")
 
-# ---------- Sidebar: choose mode ----------
+# ---------- Sidebar ----------
 st.sidebar.header("Run Mode")
 
 mode = st.sidebar.selectbox(
@@ -21,11 +20,8 @@ mode = st.sidebar.selectbox(
     ["Local (Ollama - free)", "Cloud (Groq - free tier)"]
 )
 
-# Local model name (must exist in `ollama list`)
 local_model = st.sidebar.text_input("Local model", value="phi3")
-
-# Groq model name (common choices; you can change)
-groq_model = st.sidebar.text_input("Groq model", "mixtral-8x7b-32768")
+groq_model = st.sidebar.text_input("Groq model", value="mixtral-8x7b-32768")
 
 # ---------- Load vector DB ----------
 @st.cache_resource
@@ -36,33 +32,24 @@ def load_db():
     return Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
 
 db = load_db()
-retriever = db.as_retriever(search_kwargs={"k": 4})
+retriever = db.as_retriever(search_kwargs={"k": 2})
 
-
-# ---------- Choose LLM ----------
+# ---------- LLM चयन ----------
 def get_llm():
     if mode.startswith("Local"):
         return ChatOllama(model=local_model, temperature=0)
 
-    # Cloud mode (Groq)
-    # Streamlit Cloud uses st.secrets; local can use env var
-    groq_key = None
-    if "GROQ_API_KEY" in st.secrets:
-        groq_key = st.secrets["GROQ_API_KEY"]
-    else:
-        groq_key = os.getenv("GROQ_API_KEY")
-
+    # Cloud (Groq)
+    groq_key = st.secrets.get("GROQ_API_KEY", None) or os.getenv("GROQ_API_KEY")
     if not groq_key:
-        st.error("Cloud mode needs GROQ_API_KEY (add it to Streamlit Secrets or your environment variables).")
+        st.error("Cloud mode needs GROQ_API_KEY (add it to Streamlit Secrets).")
         st.stop()
 
     return ChatGroq(model=groq_model, temperature=0, api_key=groq_key)
 
-
 llm = get_llm()
 
-
-# ---------- Helper: format sources ----------
+# ---------- Source formatter ----------
 def format_source(doc, idx: int) -> str:
     stype = doc.metadata.get("source_type", "unknown")
     src = doc.metadata.get("source", "unknown")
@@ -76,16 +63,21 @@ def format_source(doc, idx: int) -> str:
         return f"• [{idx}] {src} (sheet: {sheet}, row: {row})"
     return f"• [{idx}] {src}"
 
-
-# ---------- RAG answer ----------
+# ---------- RAG ----------
 def answer_with_sources(question: str):
     docs = retriever.invoke(question)
 
-    context = ""
+    context_parts = []
     sources = []
+
     for i, d in enumerate(docs, start=1):
         sources.append(format_source(d, i))
-        context += f"\n--- Source {i} ---\n{d.page_content}\n"
+
+        # limit chunk size to avoid Groq BadRequest (context too long)
+        chunk_text = (d.page_content or "")[:1200]
+        context_parts.append(f"--- Source {i} ---\n{chunk_text}")
+
+    context = "\n\n".join(context_parts)
 
     prompt = f"""You are a governed, read-only assistant.
 Use ONLY the context below. Do not use outside knowledge.
@@ -102,9 +94,9 @@ Write a clear answer.
 End with citations like [1], [2] referencing the sources.
 ANSWER:
 """
+
     resp = llm.invoke([HumanMessage(content=prompt)])
     return resp.content, sources
-
 
 # ---------- Chat UI ----------
 if "history" not in st.session_state:
@@ -128,4 +120,3 @@ if st.session_state.last_sources:
     st.subheader("Sources")
     for s in st.session_state.last_sources:
         st.write(s)
-        
