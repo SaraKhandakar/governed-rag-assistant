@@ -25,7 +25,7 @@ mode = st.sidebar.selectbox(
 local_model = st.sidebar.text_input("Local model", value="phi3")
 
 # Groq model name (common choices; you can change)
-groq_model = st.sidebar.text_input("Groq model", value="llama3-8b-8192")
+groq_model = st.sidebar.text_input("Groq model", "mixtral-8x7b-32768")
 
 # ---------- Load vector DB ----------
 @st.cache_resource
