@@ -9,3 +9,5 @@ langchain-chroma
 sentence-transformers
 unstructured
 pypdf
+langchain-groq
+groq
