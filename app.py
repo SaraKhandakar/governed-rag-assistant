@@ -7,6 +7,8 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.chat_models import ChatOllama
 from langchain_groq import ChatGroq
 
+IS_CLOUD = os.getenv("STREAMLIT_SERVER_RUNNING", "") == "true" or os.path.exists("/mount/src")
+
 DB_DIR = "chroma_db"
 
 st.set_page_config(page_title="Governed RAG Assistant", layout="wide")
@@ -15,13 +17,26 @@ st.title("📚 Governed RAG Assistant (Local + Cloud modes)")
 # ---------- Sidebar ----------
 st.sidebar.header("Run Mode")
 
-mode = st.sidebar.selectbox(
-    "Choose where the LLM runs",
-    ["Local (Ollama - free)", "Cloud (Groq - free tier)"]
-)
+if IS_CLOUD:
+    st.sidebar.info("Running on Streamlit Cloud → using Cloud (Groq) mode.")
+    mode = "Cloud (Groq - free tier)"
+else:
+    mode = st.sidebar.selectbox(
+        "Choose where the LLM runs",
+        ["Local (Ollama - free)", "Cloud (Groq - free tier)"]
+    )
 
 local_model = st.sidebar.text_input("Local model", value="phi3")
-groq_model = st.sidebar.text_input("Groq model", value="mixtral-8x7b-32768")
+groq_model = st.sidebar.selectbox(
+    "Groq model",
+    [
+        "llama-3.1-8b-instant",
+        "llama-3.1-70b-versatile",
+        "gemma2-9b-it",
+    ],
+    index=0
+)
+
 
 # ---------- Load vector DB ----------
 @st.cache_resource
@@ -95,8 +110,11 @@ End with citations like [1], [2] referencing the sources.
 ANSWER:
 """
 
+try:
     resp = llm.invoke([HumanMessage(content=prompt)])
     return resp.content, sources
+except Exception as e:
+    return f"❌ Cloud LLM error: {e}", sources
 
 # ---------- Chat UI ----------
 if "history" not in st.session_state:
